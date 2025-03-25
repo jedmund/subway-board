@@ -1,0 +1,4 @@
+CIRCUITPY_WIFI_SSID="kikitown"
+CIRCUITPY_WIFI_PASSWORD="cherrieisawesome"
+
+CIRCUITPY_WEB_API_PASSWORD="cherrie"
