@@ -18,7 +18,7 @@ def initialize_system():
     try:
         # Initialize network and time
         connection_manager = get_connection_manager()
-        connection_manager.sync_time(tz_offset=0)  # Eastern Time
+        connection_manager.sync_time(tz_offset=-5)  # Eastern Standard Time
 
         # Initialize display
         display = Display(scroll_speed=SCROLL_SPEED)

@@ -63,6 +63,9 @@ def get_train_times(feed_dict, stop_id):
                 best_t = dep_time if dep_time else arr_time
 
                 if best_t and best_t >= now:
+                    # Convert from UTC to local time by subtracting the timezone offset
+                    # MTA API returns UTC times, so we need to adjust by -5 hours (EST)
+                    best_t = best_t - (5 * 3600)  # Subtract 5 hours (in seconds) to convert from UTC to EST
                     mins = int((best_t - now) // 60)
                     debug_print(f"  Valid future time: {mins} minutes from now")
                     arrivals.append((trip_id, mins))

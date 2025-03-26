@@ -5,6 +5,10 @@ import rgbmatrix
 import terminalio
 import array
 import time
+import rtc
+import wifi
+import socketpool
+import adafruit_ntp
 
 
 class Display:
@@ -13,6 +17,17 @@ class Display:
 
         self.scroll_speed = scroll_speed
         self.scrolling_enabled = scrolling_enabled
+        
+        # Define quiet hours (8 PM to 3:30 AM)
+        self.quiet_start_hour = 20    # 8 PM
+        self.quiet_start_minute = 0
+        self.quiet_end_hour = 3       # 3 AM
+        self.quiet_end_minute = 30    # 30 minutes
+        self.display_enabled = True
+        self.night_mode = False
+
+        # Try to sync time with NTP
+        self.sync_time()
 
         # Initialize the RGB matrix
         matrix = rgbmatrix.RGBMatrix(
@@ -46,6 +61,7 @@ class Display:
         self.setup_display_groups()
         self.setup_character_map()
         self.setup_line_resources()
+        self.setup_night_mode()
 
         self.display.root_group = self.main_group
 
@@ -91,6 +107,29 @@ class Display:
         for x in range(5, 9):  # Same length
             for y in range(7, 9):  # Made thinner (just 1 pixel tall)
                 bitmap[x, y] = 0
+
+    def draw_moon_bitmap(self, bitmap):
+        """
+        Draws a simple crescent moon shape on the given bitmap.
+        Bitmap is 8x8 pixels with 2 colors (0=off, 1=on).
+        """
+        # First clear the bitmap
+        for x in range(8):
+            for y in range(8):
+                bitmap[x, y] = 0
+
+        # Draw a simple crescent moon shape
+        # Outer circle
+        for x in range(1, 7):
+            for y in range(1, 7):
+                if (x-3.5)**2 + (y-3.5)**2 <= 12:
+                    bitmap[x, y] = 1
+
+        # Inner circle (shifted right to create crescent)
+        for x in range(2, 7):
+            for y in range(1, 7):
+                if (x-4.5)**2 + (y-3.5)**2 <= 8:
+                    bitmap[x, y] = 0
 
     def setup_display_groups(self):
         self.main_group = displayio.Group()
@@ -188,8 +227,115 @@ class Display:
             glyph_code = ord(text[i])
             grids[i][0] = self.charmap[glyph_code]
 
+    def sync_time(self):
+        """Synchronize time with NTP server"""
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # Ensure WiFi is connected
+                if not wifi.radio.connected:
+                    print("WiFi not connected, skipping time sync")
+                    return
+
+                # Create a socket pool for NTP
+                pool = socketpool.SocketPool(wifi.radio)
+                
+                # Connect to NTP server
+                ntp = adafruit_ntp.NTP(pool, tz_offset=-5)  # EST offset (-5 for EST)
+                
+                # Update the RTC
+                rtc.RTC().datetime = ntp.datetime
+                print("Time synchronized with NTP server")
+                current_time = time.localtime()
+                print(f"Current time: {current_time.tm_hour:02d}:{current_time.tm_min:02d}:{current_time.tm_sec:02d}")
+                return True
+            except Exception as e:
+                print(f"Time sync attempt {attempt + 1} failed: {str(e)}")
+                if attempt < max_retries - 1:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                else:
+                    print("Time sync failed after all retries")
+        return False
+
+    def is_quiet_hours(self):
+        """Check if current time is within quiet hours (10 PM - 3:30 AM)"""
+        current_time = time.localtime()
+        current_hour = current_time.tm_hour
+        current_minute = current_time.tm_min
+        
+        # Convert all times to minutes since midnight for easier comparison
+        current_minutes = current_hour * 60 + current_minute
+        quiet_start_minutes = self.quiet_start_hour * 60 + self.quiet_start_minute
+        quiet_end_minutes = self.quiet_end_hour * 60 + self.quiet_end_minute
+        
+        # If we're after 10 PM (22:00)
+        if current_hour >= self.quiet_start_hour:
+            return True
+        # If we're before 3:30 AM
+        elif current_hour < self.quiet_end_hour or (current_hour == self.quiet_end_hour and current_minute < self.quiet_end_minute):
+            return True
+        
+        # Otherwise, not in quiet hours
+        return False
+
+    def setup_night_mode(self):
+        """Setup the night mode display elements"""
+        # Create a bitmap for the moon icon (8x8)
+        self.night_bitmap = displayio.Bitmap(8, 8, 2)
+        self.night_palette = displayio.Palette(2)
+        self.night_palette[0] = 0x000000  # Off (black)
+        self.night_palette[1] = 0x222222  # Very dim white
+
+        # Draw the moon shape
+        self.draw_moon_bitmap(self.night_bitmap)
+
+        # Create tile grid for the night icon
+        self.night_grid = displayio.TileGrid(
+            self.night_bitmap,
+            pixel_shader=self.night_palette,
+            x=60,  # Center horizontally
+            y=12   # Center vertically
+        )
+
+        # Create a group for night mode
+        self.night_group = displayio.Group()
+        self.night_group.append(self.night_grid)
+
+    def show_night_mode(self):
+        """Switch display to night mode"""
+        if not self.night_mode:
+            self.display.brightness = 0.1  # Very dim
+            self.main_group.hidden = True
+            self.display.root_group = self.night_group
+            self.night_mode = True
+            self.display.refresh(minimum_frames_per_second=0)
+
+    def show_normal_mode(self):
+        """Switch display to normal mode"""
+        if self.night_mode:
+            self.display.brightness = 1
+            self.main_group.hidden = False
+            self.display.root_group = self.main_group
+            self.night_mode = False
+
     def update_display(self, text1, colors1, text2, colors2, scroll_times=5):
         """Update display with text either statically or with scrolling based on configuration."""
+        # Check if we're in quiet hours
+        in_quiet_hours = self.is_quiet_hours()
+        print(f"Current time: {time.localtime().tm_hour}:{time.localtime().tm_min}")
+        print(f"In quiet hours: {in_quiet_hours}")
+        
+        if in_quiet_hours:
+            self.show_night_mode()
+            return
+        
+        # If we were in night mode, switch back to normal mode
+        self.show_normal_mode()
+            
+        # Continue with normal display update
         if self.scrolling_enabled:
             self._scroll_text(text1, colors1, text2, colors2, scroll_times)
         else:

@@ -53,18 +53,39 @@ class ConnectionManager:
         Args:
             tz_offset (int): Timezone offset from UTC in hours
         """
-        try:
-            if self._ntp is None:
-                self._ntp = adafruit_ntp.NTP(self.pool, tz_offset=tz_offset)
-            rtc.RTC().datetime = self._ntp.datetime
-            current_time = time.localtime()
-            print(
-                f"Time synchronized: {current_time.tm_hour:02d}:{current_time.tm_min:02d}:{current_time.tm_sec:02d}"
-            )
-            return True
-        except Exception as e:
-            print(f"Failed to sync time: {e}")
-            return False
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        # Ensure WiFi is connected
+        if not wifi.radio.connected:
+            print("WiFi not connected, attempting to reconnect...")
+            try:
+                wifi.radio.connect(os.getenv("CIRCUITPY_WIFI_SSID"), 
+                                 os.getenv("CIRCUITPY_WIFI_PASSWORD"))
+            except Exception as e:
+                print(f"Failed to connect to WiFi: {e}")
+                return False
+
+        for attempt in range(max_retries):
+            try:
+                if self._ntp is None:
+                    self._ntp = adafruit_ntp.NTP(self.pool, tz_offset=tz_offset)
+                rtc.RTC().datetime = self._ntp.datetime
+                current_time = time.localtime()
+                print(
+                    f"Time synchronized: {current_time.tm_hour:02d}:{current_time.tm_min:02d}:{current_time.tm_sec:02d}"
+                )
+                return True
+            except Exception as e:
+                print(f"Time sync attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    # Reset NTP client on retry
+                    self._ntp = None
+        
+        print("Failed to sync time after all retries")
+        return False
 
 
 def connect_wifi():
