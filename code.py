@@ -1,5 +1,5 @@
 from config import (
-    MTA_L_FEED_URL,
+    MTA_FEED_URL,
     STOP_ID_NORTHBOUND,
     STOP_ID_SOUTHBOUND,
     COLOR_RED,
@@ -40,7 +40,7 @@ def fetch_train_data(connection_manager):
     """Fetch and process train data."""
     try:
         # Get and parse feed data
-        feed_dict = get_feed_data(connection_manager, MTA_L_FEED_URL)
+        feed_dict = get_feed_data(connection_manager, MTA_FEED_URL)
         
         # Get train times
         north_arrivals = get_train_times(feed_dict, STOP_ID_NORTHBOUND)
