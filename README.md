@@ -12,5 +12,5 @@ This is a subway arrivals board which can display up to two stations.
 4. Copy files to the MatrixPortal S3's storage by connecting it to your computer over USB.
 
 ### Resources
-[GTFS-realtime Reference for the New York City Subway](https://www.mta.info/document/134521)
-[MTA Subway Stations and Complexes](https://data.ny.gov/w/5f5g-n3cz/caer-yrtv?cur=YKNbfco1WDe)
+- [GTFS-realtime Reference for the New York City Subway](https://www.mta.info/document/134521)
+- [MTA Subway Stations and Complexes](https://data.ny.gov/w/5f5g-n3cz/caer-yrtv?cur=YKNbfco1WDe)
