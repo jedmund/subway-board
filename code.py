@@ -60,6 +60,16 @@ def main():
     """Main program loop for MTA train display."""
     try:
         connection_manager, display = initialize_system()
+
+        # Ignore any false button presses at boot
+        display.last_button_state = not display.button_up.value
+        print(f"Initial button state: {display.last_button_state}")
+
+        # Check appropriate mode based on time when first starting
+        if display.is_quiet_hours():
+            display.show_night_mode()
+        else:
+            display.show_normal_mode()
     except Exception as e:
         print(f"Fatal error during initialization: {e}")
         return
@@ -67,6 +77,15 @@ def main():
     # Initial data fetch
     north_text, north_colors, south_text, south_colors = fetch_train_data(connection_manager)
     
+    # Check appropriate mode based on time when first starting
+    if display.is_quiet_hours():
+        display.show_night_mode()
+    else:
+        display.show_normal_mode()
+        # Show initial data if in normal mode and data available
+        if north_text and south_text:
+            display._static_display(north_text, north_colors, south_text, south_colors)
+
     last_refresh_time = time.monotonic()
 
     while True:

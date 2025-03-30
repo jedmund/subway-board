@@ -248,18 +248,21 @@ class Display:
         
         # Handle button press
         if button_newly_pressed:
+            print("BUTTON PRESSED!")
             # Toggle manual night mode
             self.manual_night_mode = not self.manual_night_mode
             
+            # Simple debounce after handling the press
+            time.sleep(self.debounce_time)
+            
             if self.manual_night_mode:
+                print("Manual night mode ON")
                 self.show_night_mode()
                 return 1  # Button turned night mode ON
             else:
+                print("Manual night mode OFF")
                 self.show_normal_mode()
                 return 2  # Button turned night mode OFF
-                
-            # Simple debounce after handling the press
-            time.sleep(self.debounce_time)
         
         return 0  # No button press
 
@@ -287,6 +290,9 @@ class Display:
         current_time = time.localtime()
         current_hour = current_time.tm_hour
         current_minute = current_time.tm_min
+
+        print(f"Current time: {current_hour}:{current_minute}")
+        print(f"Quiet hours: {self.QUIET_START_HOUR}:{self.QUIET_START_MIN} to {self.QUIET_END_HOUR}:{self.QUIET_END_MIN}")
         
         # If we're after start hour
         if current_hour > self.QUIET_START_HOUR or (
