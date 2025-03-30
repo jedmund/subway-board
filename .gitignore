@@ -1,3 +1,5 @@
 /.DS_Store
 /.vscode/settings.json
 /lib/.DS_Store
+*.txt
+*.log
