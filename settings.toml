@@ -1,4 +1,4 @@
-CIRCUITPY_WIFI_SSID="kikitown"
-CIRCUITPY_WIFI_PASSWORD="cherrieisawesome"
+CIRCUITPY_WIFI_SSID = "your_ssid"
+CIRCUITPY_WIFI_PASSWORD = "your_password"
 
-CIRCUITPY_WEB_API_PASSWORD="cherrie"
+CIRCUITPY_WEB_API_PASSWORD = "subway-board"
