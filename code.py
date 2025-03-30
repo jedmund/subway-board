@@ -36,49 +36,82 @@ def display_error(display, error_msg):
     display.set_text_with_colors(str(error_msg), [COLOR_RED], 1)
     time.sleep(5)
 
+def fetch_train_data(connection_manager):
+    """Fetch and process train data."""
+    try:
+        # Get and parse feed data
+        feed_dict = get_feed_data(connection_manager, MTA_L_FEED_URL)
+        
+        # Get train times
+        north_arrivals = get_train_times(feed_dict, STOP_ID_NORTHBOUND)
+        south_arrivals = get_train_times(feed_dict, STOP_ID_SOUTHBOUND)
+        
+        # Format train display
+        north_text, north_colors = format_train_display(north_arrivals, "City")
+        south_text, south_colors = format_train_display(south_arrivals, "Bkln")
+        
+        return north_text, north_colors, south_text, south_colors
+    except Exception as e:
+        print(f"Error fetching train data: {e}")
+        return None, None, None, None
+
 
 def main():
     """Main program loop for MTA train display."""
     try:
         connection_manager, display = initialize_system()
     except Exception as e:
-        # If initialization fails, we can't continue
         print(f"Fatal error during initialization: {e}")
         return
 
+    # Initial data fetch
+    north_text, north_colors, south_text, south_colors = fetch_train_data(connection_manager)
+    
+    last_refresh_time = time.monotonic()
+
     while True:
         try:
-            # Get and parse feed data
-            feed_dict = get_feed_data(connection_manager, MTA_L_FEED_URL)
-
-            # Get train times
-            north_arrivals = get_train_times(feed_dict, STOP_ID_NORTHBOUND)
-            south_arrivals = get_train_times(feed_dict, STOP_ID_SOUTHBOUND)
-
-            # Format and display train times
-            north_text, north_colors = format_train_display(north_arrivals, "City")
-            south_text, south_colors = format_train_display(south_arrivals, "Bkln")
-
-            # Update display
-            display.update_display(
-                north_text,
-                north_colors,
-                south_text,
-                south_colors,
-                scroll_times=SCROLL_TIMES,
-            )
-
-            # Wait before next refresh
-            time.sleep(DATA_REFRESH_INTERVAL)
+            # Check button continuously
+            button_result = display.check_button()
+            
+            current_time = time.monotonic()
+            need_refresh = False
+            
+            # If night mode was turned OFF, need fresh data
+            if button_result == 2:
+                need_refresh = True
+            
+            # Or if it's time for regular refresh
+            if current_time - last_refresh_time >= DATA_REFRESH_INTERVAL:
+                need_refresh = True
+                last_refresh_time = current_time
+            
+            # Fetch new data if needed
+            if need_refresh:
+                north_text, north_colors, south_text, south_colors = fetch_train_data(connection_manager)
+                
+                # Skip button check if this refresh was triggered by button press
+                if button_result == 2:
+                    display._static_display(north_text, north_colors, south_text, south_colors)
+                else:
+                    display.update_display(
+                        north_text,
+                        north_colors,
+                        south_text,
+                        south_colors,
+                        scroll_times=SCROLL_TIMES,
+                    )
+            
+            # Small delay to prevent CPU hogging
+            time.sleep(0.1)
 
         except Exception as e:
             display_error(display, e)
-            # Attempt to reinitialize system components
             try:
                 connection_manager, display = initialize_system()
             except Exception as reinit_error:
                 print(f"Failed to reinitialize: {reinit_error}")
-                time.sleep(30)  # Wait before retrying
+                time.sleep(30)
 
 
 if __name__ == "__main__":

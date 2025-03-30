@@ -7,8 +7,8 @@ from config import (
     COLOR_BLUE,
     DEBUG_MODE,
 )
-from partial_protobuf_feed import parse_feed_message
 
+EST_OFFSET = -5 * 3600  # 5 hours in seconds (UTC to EST)
 
 def get_feed_data(connection_manager, feed_url):
     """Fetch and parse the MTA feed data."""
@@ -17,129 +17,84 @@ def get_feed_data(connection_manager, feed_url):
         raise Exception("Failed to fetch feed")
 
     debug_print("\nParsing feed data...")
-    feed_dict = parse_feed_message(feed_data)
-
-    debug_print(f"Keys in feed_dict: {feed_dict.keys()}")
-    if "entity" in feed_dict:
-        debug_print(f"Number of entities: {len(feed_dict['entity'])}")
-        if feed_dict["entity"]:
-            debug_print("First entity structure:", feed_dict["entity"][0].keys())
-
-    return feed_dict
-
+    from partial_protobuf_feed import parse_feed_message
+    return parse_feed_message(feed_data)
 
 def get_train_times(feed_dict, stop_id):
+    """Get upcoming train arrivals for a specific stop."""
     now = time.time()
     arrivals = []
-
+    
     debug_print(f"\nProcessing stop_id: {stop_id}")
-    debug_print(f"Current time: {now}")
-    debug_print(f"Number of entities: {len(feed_dict.get('entity', []))}")
-
+    
     for entity in feed_dict.get("entity", []):
         trip_update = entity.get("trip_update")
         if not trip_update:
-            debug_print("No trip_update in entity")
             continue
 
         trip_id = trip_update.get("trip", {}).get("trip_id", "Unknown")
-        debug_print(f"\nAnalyzing trip_update: {trip_id}")
+        process_stop_updates(trip_update, stop_id, trip_id, now, arrivals)
+    
+    # Return only the next 3 arrivals, sorted by time
+    return sorted(arrivals, key=lambda x: x[1])[:3]
 
-        stop_time_updates = trip_update.get("stop_time_update", [])
-        debug_print(f"Number of stop_time_updates: {len(stop_time_updates)}")
+def process_stop_updates(trip_update, stop_id, trip_id, now, arrivals):
+    """Process stop time updates for a trip."""
+    for stu in trip_update.get("stop_time_update", []):
+        if stu.get("stop_id") != stop_id:
+            continue
+            
+        # Use departure time if available, otherwise use arrival time
+        arr_time = stu.get("arrival_time")
+        dep_time = stu.get("departure_time")
+        best_time = dep_time if dep_time else arr_time
+        
+        if not best_time or best_time < now:
+            continue
+            
+        # Convert UTC to EST
+        local_time = best_time + EST_OFFSET
+        mins = int((local_time - now) // 60)
+        
+        arrivals.append((trip_id, mins))
 
-        for stu in stop_time_updates:
-            current_stop = stu.get("stop_id")
-            debug_print(f"  Stop: {current_stop} (looking for {stop_id})")
-
-            if current_stop == stop_id:
-                arr_time = stu.get("arrival_time")
-                dep_time = stu.get("departure_time")
-
-                debug_print(f"  Found matching stop!")
-                debug_print(f"  Arrival time: {arr_time}")
-                debug_print(f"  Departure time: {dep_time}")
-
-                best_t = dep_time if dep_time else arr_time
-
-                if best_t and best_t >= now:
-                    # Convert from UTC to local time by subtracting the timezone offset
-                    # MTA API returns UTC times, so we need to adjust by -5 hours (EST)
-                    best_t = best_t - (5 * 3600)  # Subtract 5 hours (in seconds) to convert from UTC to EST
-                    mins = int((best_t - now) // 60)
-                    debug_print(f"  Valid future time: {mins} minutes from now")
-                    arrivals.append((trip_id, mins))
-                else:
-                    if not best_t:
-                        debug_print("  No valid time found")
-                    else:
-                        debug_print(
-                            f"  Time in past: {(best_t - now) / 60:.1f} minutes ago"
-                        )
-            else:
-                debug_print(f"  Stop ID mismatch")
-
-    result = sorted(arrivals, key=lambda x: x[1])[:3]
-    debug_print(f"\nFinal arrivals for {stop_id}: {result}")
-
-    return result
-
-
+def get_time_color(mins):
+    """Return the appropriate color based on arrival time."""
+    if mins < 2:
+        return COLOR_RED
+    elif mins < 5:
+        return COLOR_YELLOW
+    else:
+        return COLOR_WHITE
+    
 def format_train_display(arrivals, direction):
-    """
-    Build a text string + matching colors so each character is assigned
-    the correct color. This ensures the digit(s) get the intended color,
-    not the 'm' or space.
-    """
+    """Format train arrivals for display with appropriate colors."""
     if not arrivals:
-        # If no arrivals, just say: "Bkln No trains" (for example).
         text = f"{direction} No trains"
-        # Colors: direction in BLUE, "No trains" in WHITE
         colors = [COLOR_BLUE] * len(direction) + [COLOR_WHITE] * len(" No trains")
         return text, colors
 
-    # 1) Start with your direction label (e.g. "Bkln")
+    # Start with the direction
     text = direction
-    # All those characters in direction => BLUE
     colors = [COLOR_BLUE] * len(direction)
 
+    # Add each arrival time
     for i, (_, mins) in enumerate(arrivals):
-        # 2) Build the next arrival snippet, e.g. " 9m" or " 12m"
-        #    starting with a leading space
         time_text = f" {mins}m"
-
-        # Decide color for the numeric portion
-        if mins < 2:
-            mins_color = COLOR_RED
-        elif mins < 5:
-            mins_color = COLOR_YELLOW
-        else:
-            mins_color = COLOR_WHITE
-
-        # 3) Append the snippet to the text
         text += time_text
-
-        # 4) Build a color list that matches every character in time_text
-        #    " 9m" => [space, digit(s), 'm']
-        sub_colors = []
-
-        # The first character is space => use WHITE (or your preference)
-        sub_colors.append(COLOR_WHITE)
-
-        # For each digit in str(mins), use mins_color
-        for digit in str(mins):
-            sub_colors.append(mins_color)
-
-        # The last char is 'm' => use mins_color
-        sub_colors.append(mins_color)
-
-        # 5) Extend your main colors array
-        colors.extend(sub_colors)
-
-        # 6) If there are more arrivals to come, add a comma
+        
+        # Determine color for this arrival
+        mins_color = get_time_color(mins)
+        
+        # Add colors for each character
+        colors.append(COLOR_WHITE)  # space
+        for _ in str(mins):
+            colors.append(mins_color)  # digits
+        colors.append(mins_color)  # 'm'
+        
+        # Add comma if not the last arrival
         if i < len(arrivals) - 1:
             text += ","
-            # Add color for the comma => typically WHITE
             colors.append(COLOR_WHITE)
 
     return text, colors

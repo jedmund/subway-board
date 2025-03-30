@@ -26,6 +26,12 @@ SCROLL_TIMES = 5
 # Data refresh settings (seconds)
 DATA_REFRESH_INTERVAL = 30
 
+# Quiet hours settings
+QUIET_START_HOUR = 20    # 8 PM
+QUIET_START_MIN = 0
+QUIET_END_HOUR = 3       # 3 AM
+QUIET_END_MIN = 30       # 30 minutes
+
 # System settings
 DEBUG_MODE = False  # Enable/disable debug logging
 
