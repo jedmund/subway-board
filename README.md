@@ -6,8 +6,10 @@ This is a subway arrivals board which can display up to two stations.
 - Custom 3D printed case (will be uploaded to Printables)
 
 ### Instructions
-1. You will need to edit `config.py` and add the URL to your subway line, and the Stop IDs for your desired stop. Northbound and Southbound will have different Stop IDs.
-2. Clone this repo and copy it to the MatrixPortal S3's storage by connecting it to your computer over USB.
+1. Add your Wi-Fi SSID and password to `settings.toml`.
+2. Edit `config.py` and add the URL to your subway line. You can find a list of all GTFS-realtime feeds at [Subway Realtime Feeds](https://api.mta.info/#/subwayRealTimeFeeds).
+3. Also add the Stop IDs for your desired station in `config.py`. Northbound and Southbound will have different Stop IDs.
+4. Copy files to the MatrixPortal S3's storage by connecting it to your computer over USB.
 
 ### Resources
 [GTFS-realtime Reference for the New York City Subway](https://www.mta.info/document/134521)
