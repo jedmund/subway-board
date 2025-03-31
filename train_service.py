@@ -55,6 +55,9 @@ def process_stop_updates(trip_update, stop_id, trip_id, now, arrivals):
         # Convert UTC to EST
         local_time = best_time + EST_OFFSET
         mins = int((local_time - now) // 60)
+
+        if mins < 0:
+            mins = 0
         
         arrivals.append((trip_id, mins))
 
